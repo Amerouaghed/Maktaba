@@ -1,34 +1,64 @@
-package com.ElOuedUniv.maktaba.presentation.view
+package com.ElOuedUniv.maktaba.presentation.book
+
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.foundation.clickable
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.ElOuedUniv.maktaba.data.model.Book
-import com.ElOuedUniv.maktaba.presentation.viewmodel.BookViewModel
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BookListView(
-    viewModel: BookViewModel,
-    onCategoriesClick: () -> Unit = {}
+
+            onCategoriesClick: () -> Unit = {},
+viewModel: BookViewModel = hiltViewModel()
 ) {
-    val books by viewModel.books.collectAsState()
-    val isLoading by viewModel.isLoading.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    LaunchedEffect(Unit) {
+        viewModel.uiEvent.collect { event ->
+            when (event) {
+                is BookUiEvent.ShowToast -> println("Toast: ${event.message}")
+                is BookUiEvent.ShowError -> println("Error: ${event.message}")
+                is BookUiEvent.NavigateToDetails -> println("Navigate to: ${event.bookId}")
+                is BookUiEvent.NavigateToCategories -> onCategoriesClick()
+                is BookUiEvent.ShowSnackbar -> println("Snackbar: ${event.message}")
+            }
+        }
+    }
+
+    // TODO: Exercise 3 - Use a single delegated state from the ViewModel
+    // val uiState by viewModel.uiState.collectAsState()
+
+
+    if (uiState.isAddingBook) {
+        AddBookDialog(
+            onDismiss = { viewModel.onAction(BookUiAction.OnDismissAddBook) },
+            onConfirm = { book ->
+                viewModel.onAction(BookUiAction.OnAddBookConfirm(book))
+            }
+        )
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Maktaba - My Library") },
+                title = { Text("📚 Maktaba - My Library") },
                 actions = {
                     IconButton(onClick = onCategoriesClick) {
                         Icon(
@@ -42,6 +72,17 @@ fun BookListView(
                     titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
                 )
             )
+        },
+        floatingActionButton = {
+
+            FloatingActionButton(
+                onClick = { viewModel.onAction(BookUiAction.OnAddBookClick) }
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = "Add Book"
+                )
+            }
         }
     ) { paddingValues ->
         Box(
@@ -49,18 +90,21 @@ fun BookListView(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            if (isLoading) {
+            if (uiState.isLoading) {
                 CircularProgressIndicator(
                     modifier = Modifier.align(Alignment.Center)
                 )
             } else {
-                if (books.isEmpty()) {
+                if (uiState.books.isEmpty()) {
                     EmptyBooksMessage(
                         modifier = Modifier.align(Alignment.Center)
                     )
                 } else {
                     BookList(
-                        books = books,
+                        books = uiState.books,
+                        onBookClick = { book ->
+                            viewModel.onAction(BookUiAction.OnBookClick(book.isbn))
+                        },
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -72,6 +116,7 @@ fun BookListView(
 @Composable
 fun BookList(
     books: List<Book>,
+    onBookClick: (Book) -> Unit,
     modifier: Modifier = Modifier
 ) {
     LazyColumn(
@@ -80,15 +125,23 @@ fun BookList(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         items(books) { book ->
-            BookItem(book = book)
+            BookItem(
+                book = book,
+                onClick = { onBookClick(book) }
+            )
         }
     }
 }
 
 @Composable
-fun BookItem(book: Book) {
+fun BookItem(
+    book: Book,
+    onClick: () -> Unit
+) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() },
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
         Column(
@@ -101,13 +154,13 @@ fun BookItem(book: Book) {
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold
             )
-            
+
             Spacer(modifier = Modifier.height(8.dp))
-            
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
-              ) {
+            ) {
                 Column {
                     Text(
                         text = "ISBN:",
@@ -115,11 +168,11 @@ fun BookItem(book: Book) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        text = if (book.isbn.isEmpty()) "Not set" else book.isbn,
+                        text = book.isbn,
                         style = MaterialTheme.typography.bodyMedium
                     )
                 }
-                
+
                 Column(horizontalAlignment = Alignment.End) {
                     Text(
                         text = "Pages:",
@@ -127,8 +180,9 @@ fun BookItem(book: Book) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        text = if (book.nbPages == 0) "Not set" else "${book.nbPages}",
-                        style = MaterialTheme.typography.bodyMedium
+                        text = "${book.nbPages}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold
                     )
                 }
             }
@@ -154,10 +208,9 @@ fun EmptyBooksMessage(modifier: Modifier = Modifier) {
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "Complete the TODO exercises in BookRepository.kt",
+            text = "Click the + button to add a book",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
-

@@ -1,29 +1,39 @@
-package com.ElOuedUniv.maktaba.presentation.view
+package com.ElOuedUniv.maktaba.presentation.category
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ElOuedUniv.maktaba.data.model.Category
-import com.ElOuedUniv.maktaba.presentation.viewmodel.CategoryViewModel
-
+import androidx.compose.foundation.lazy.items
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CategoryListView(
-    viewModel: CategoryViewModel,
+    viewModel: CategoryViewModel = hiltViewModel(),
     onBackClick: () -> Unit
 ) {
-    val categories by viewModel.categories.collectAsState()
-    val isLoading by viewModel.isLoading.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+
+    LaunchedEffect(Unit) {
+        viewModel.uiEvent.collect { event ->
+            when (event) {
+                is CategoryUiEvent.ShowToast -> println("Toast: ${event.message}")
+                is CategoryUiEvent.ShowError -> println("Error: ${event.message}")
+                is CategoryUiEvent.NavigateToCategory -> println("Navigate to: ${event.categoryId}")
+                else -> {}
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -49,32 +59,36 @@ fun CategoryListView(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            if (isLoading) {
+            if (uiState.isLoading) {
                 CircularProgressIndicator(
                     modifier = Modifier.align(Alignment.Center)
                 )
+            } else if (uiState.categories.isEmpty()) {
+                EmptyCategoriesMessage(
+                    modifier = Modifier.align(Alignment.Center)
+                )
             } else {
-                if (categories.isEmpty()) {
-                    EmptyCategoriesMessage(
-                        modifier = Modifier.align(Alignment.Center)
-                    )
-                } else {
-                    Column(
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        CategoryCounter(
-                            count = categories.size,
-                            modifier = Modifier.padding(16.dp)
-                        )
+                Column(
+                    modifier = Modifier.fillMaxSize()
+                ) {
 
-                        LazyColumn(
-                            modifier = Modifier.weight(1f),
-                            contentPadding = PaddingValues(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            items(categories) { category ->
-                                CategoryItem(category = category)
-                            }
+                    CategoryCounter(
+                        count = uiState.categories.size,
+                        modifier = Modifier.padding(16.dp)
+                    )
+
+                    LazyColumn(
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(uiState.categories) { category ->
+                            CategoryItem(
+                                category = category,
+                                onClick = {
+                                    viewModel.onAction(CategoryUiAction.OnCategoryClick(category.id))
+                                }
+                            )
                         }
                     }
                 }
@@ -82,6 +96,10 @@ fun CategoryListView(
         }
     }
 }
+
+
+
+
 
 @Composable
 fun CategoryCounter(
@@ -92,7 +110,8 @@ fun CategoryCounter(
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.secondaryContainer
-        )
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Row(
             modifier = Modifier
@@ -103,22 +122,37 @@ fun CategoryCounter(
         ) {
             Text(
                 text = "Total Categories:",
-                style = MaterialTheme.typography.titleMedium
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSecondaryContainer
             )
-            Text(
-                text = count.toString(),
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
-            )
+
+            Surface(
+                shape = MaterialTheme.shapes.small,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.sizeIn(minWidth = 40.dp)
+            ) {
+                Text(
+                    text = count.toString(),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                )
+            }
         }
     }
 }
 
+
 @Composable
-fun CategoryItem(category: Category) {
+fun CategoryItem(
+    category: Category,
+    onClick: () -> Unit
+) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() },
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
         Column(
@@ -126,6 +160,7 @@ fun CategoryItem(category: Category) {
                 .fillMaxWidth()
                 .padding(16.dp)
         ) {
+
             Text(
                 text = category.name,
                 style = MaterialTheme.typography.titleLarge,
@@ -135,6 +170,7 @@ fun CategoryItem(category: Category) {
 
             Spacer(modifier = Modifier.height(4.dp))
 
+
             Text(
                 text = category.description,
                 style = MaterialTheme.typography.bodyMedium,
@@ -142,6 +178,7 @@ fun CategoryItem(category: Category) {
             )
 
             Spacer(modifier = Modifier.height(8.dp))
+
 
             Text(
                 text = "ID: ${category.id}",
@@ -151,6 +188,7 @@ fun CategoryItem(category: Category) {
         }
     }
 }
+
 
 @Composable
 fun EmptyCategoriesMessage(modifier: Modifier = Modifier) {
@@ -166,6 +204,12 @@ fun EmptyCategoriesMessage(modifier: Modifier = Modifier) {
         Text(
             text = "No categories found",
             style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "Check CategoryRepositoryImpl.kt",
+            style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
