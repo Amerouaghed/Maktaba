@@ -5,32 +5,32 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import com.ElOuedUniv.maktaba.data.repository.BookRepository
-import com.ElOuedUniv.maktaba.domain.usecase.GetBooksUseCase
-import com.ElOuedUniv.maktaba.presentation.screens.BookListScreen
+import com.ElOuedUniv.maktaba.presentation.book.BookListView
+import com.ElOuedUniv.maktaba.presentation.category.CategoryListView
+import com.ElOuedUniv.maktaba.presentation.navigation.NavGraph
 import com.ElOuedUniv.maktaba.presentation.theme.MaktabaTheme
-import com.ElOuedUniv.maktaba.presentation.viewmodel.BookViewModel
+import dagger.hilt.android.AndroidEntryPoint
 
-/**
- * Main Activity - Entry point of the application
- * Sets up the MVVM architecture and displays the BookListScreen
- */
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        
-        // Manual Dependency Injection (Simple approach for learning)
-        // In a real app, you would use Hilt or Koin for DI
-        val bookRepository = BookRepository()
-        val getBooksUseCase = GetBooksUseCase(bookRepository)
-        val bookViewModel = BookViewModel(getBooksUseCase)
-        
+
         setContent {
             MaktabaTheme {
-                BookListScreen(viewModel = bookViewModel)
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
+                ) {
+                    NavGraph()
+
+                    }
+                }
             }
         }
     }
-}
